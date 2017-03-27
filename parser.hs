@@ -35,6 +35,7 @@ oPr ::= < | <= | = | > | >=
 -}
 -- While Language implementation using applicative parsing (as oppose to monadic parsing)
 module While where
+import Prelude hiding (Num)
 import Control.Monad (void)
 import Text.Megaparsec
 import Text.Megaparsec.Expr
@@ -113,56 +114,64 @@ identifier = (lexeme . try) (p >>= check)
 
                 -- PARSER BEGINS (and datatypes) --
 
+type Num = Integer
+type Var = String
+type Pname = String
+type DecV = [(Var,Aexp)]
+type DecP = [(Pname, Stm)]
+
 -- Statements
-data Stat = SEQ [Stat]
-       | ASSIGN String A
-       | IF B Stat Stat
-       | WHILE B Stat
-       | SKIP
+data Stm = SEQ [Stm]
+       | Ass Var Aexp
+       | Comp Stm Stm
+       | If Bexp Stm Stm
+       | While Bexp Stm
+       | Skip
+       | Block DecV DecP Stm
+       | Call Pname
        deriving (Show)
 
 -- Boolean Expressions
-data B = BoolConst Bool
-      |  NOT B
-      |  BBinary OPb B B     -- For example true && false
-      |  RBinary OPr A A
+data Bexp = TRUE | FALSE
+      |  Neg Bexp
+      |  BBinary OPb Bexp Bexp     -- For example true && false
+      |  RBinary OPr Aexp Aexp
       deriving (Show)
 
 -- Arithmetic Expressions
-data A = Var String
-       | IntConst Integer
-       | Neg A
-       | ABinary OPa A A
+data Aexp = V Var
+       | N Num
+       | ABinary OPa Aexp Aexp
        deriving (Show)
 
 -- Boolean Operators
-data OPb = AND | OR deriving (Show)
+data OPb = And | OR deriving (Show)
 --Relational Operators
-data OPr = Greater | Lesser | GreaterEquals | LesserEquals deriving (Show)
+data OPr = Greater | Lesser | GreaterEquals | LesserEquals | Eq deriving (Show)
 
 --Arithmetic Operators
 data OPa = Add
-         | Subtract
-         | Multiply
+         | Sub
+         | Mult
          | Divide
          deriving (Show)
 
 
-whileParser :: Parser Stat
+whileParser :: Parser Stm
 whileParser = whiteSpace *> stat <* eof   -- get rid of initial whiteSpace
 
-stat :: Parser Stat
+stat :: Parser Stm
 stat = parens stat <|> statSeq
 
-statSeq :: Parser Stat
+statSeq :: Parser Stm
 statSeq = f <$> sepBy1 stat' semi
       where f l = if length l == 1 then head l else SEQ l   -- If there's only 1 statement return it
 
-stat' :: Parser Stat    -- Parsers all possible statements
+stat' :: Parser Stm    -- Parsers all possible statements
 stat' = ifStat <|> whileStat <|> skipStat <|> assignStat
 
-ifStat :: Parser Stat   -- Parses an if statement
-ifStat = IF <$ kword "if" <*> b <* kword "then" <*> stat <* kword "else" <*> stat
+ifStat :: Parser Stm   -- Parses an if statement
+ifStat = If <$ kword "if" <*> b <* kword "then" <*> stat <* kword "else" <*> stat
 
   -- Equivalent with do notation
   -- do kword "if"
@@ -171,82 +180,82 @@ ifStat = IF <$ kword "if" <*> b <* kword "then" <*> stat <* kword "else" <*> sta
   --    stat1 <- stat
   --    kword "else"
   --    stat2 <- stat
-  --    return $ IF cond stat1 stat2
+  --    return $ If cond stat1 stat2
 
 
-whileStat :: Parser Stat    -- Parses a while statement
+whileStat :: Parser Stm    -- Parses a while statement
 whileStat =
   do kword "while"
      cond <- b
      kword "do"
      stat1 <- stat
-     return $ WHILE cond stat1
+     return $ While cond stat1
 
  -- Equivalent definition for while
- -- WHILE <$ kword "while" <*> b <* kword "do" <*> stat
+ -- While <$ kword "while" <*> b <* kword "do" <*> stat
 
  -- $ is for avoiding parentheses, it give precedence to stuff after it
 
-skipStat :: Parser Stat     -- Parses a skip statement
-skipStat = SKIP <$ kword "skip"
+skipStat :: Parser Stm     -- Parses a skip statement
+skipStat = Skip <$ kword "skip"
 
-assignStat :: Parser Stat
+assignStat :: Parser Stm
 assignStat =
   do var <- identifier
      void $ symbol ":="
      expr <- a
-     return $ ASSIGN var expr
+     return $ Ass var expr
 
 -- Alternate way
-b' :: Parser B
+b' :: Parser Bexp
 b' = parens b'
-    <|> BoolConst True <$ kword "True"
-    <|> BoolConst False <$ kword "False"
-    <|> NOT <$ kword "not" <*> b
-    <|> BBinary AND <$> b <* kword "and" <*> b
+    <|> TRUE <$ kword "True"
+    <|> FALSE <$ kword "False"
+    <|> Neg <$ kword "not" <*> b
+    <|> BBinary And <$> b <* kword "and" <*> b
     <|> BBinary OR <$> b <* kword "or" <*> b
     <|> oPr
 
-    -- Do notation for AND
+    -- Do notation for And
     -- do b1 <- b
     --        kword "and"
     --        b2 <- b
-    --        return $ BBinary AND b1 b2
+    --        return $ BBinary And b1 b2
 
 
-b :: Parser B
+b :: Parser Bexp
 b = makeExprParser bTerm bOperators
 
-a :: Parser A
+a :: Parser Aexp
 a = makeExprParser aTerm aOperators
 
-bOperators :: [[Operator Parser B]]
-bOperators = [ [ Prefix (kword "not" *> pure NOT) ] ,
-               [ InfixL (kword "and" *> pure (BBinary AND)) ] ,
+bOperators :: [[Operator Parser Bexp]]
+bOperators = [ [ Prefix (kword "!" *> pure Neg) ] ,
+               [ InfixL (kword "^" *> pure (BBinary And)) ] ,
                [ InfixL (kword "or" *> pure (BBinary OR)) ]
              ]
 
-aOperators :: [[Operator Parser A]]
-aOperators = [ [ Prefix (symbol "-" *> pure Neg) ] ,
-               [ InfixL (symbol "*" *> pure (ABinary Multiply)) ] ,
+aOperators :: [[Operator Parser Aexp]]
+aOperators = [ 
+               [ InfixL (symbol "*" *> pure (ABinary Mult)) ] ,
                [ InfixL (symbol "/" *> pure (ABinary Divide)) ] ,
                [ InfixL (symbol "+" *> pure (ABinary Add)) ] ,
-               [ InfixL (symbol "-" *> pure (ABinary Subtract)) ]
+               [ InfixL (symbol "-" *> pure (ABinary Sub)) ]
              ]
 
-bTerm :: Parser B
+bTerm :: Parser Bexp
 bTerm = parens b
-     <|> (kword "true") *> pure (BoolConst True)
-     <|> (kword "false") *> pure (BoolConst False)
+     <|> (kword "true") *> pure (TRUE)
+     <|> (kword "false") *> pure (FALSE)
      <|> oPr
 
-aTerm :: Parser A
+aTerm :: Parser Aexp
 aTerm = parens a
-     <|> Var     <$>  identifier
-     <|> IntConst <$> integer
+     <|> V     <$>  identifier
+     <|> N <$> integer
 
 
-oPr :: Parser B
+oPr :: Parser Bexp
 oPr = do
   a1 <- a
   op <- relation
@@ -258,3 +267,4 @@ relation =  (symbol ">=" *> pure GreaterEquals)
         <|> (symbol "<=" *> pure LesserEquals)
         <|> (symbol ">" *> pure Greater)
         <|> (symbol "<" *> pure Lesser)
+        <|> (symbol "=" *> pure Eq)
