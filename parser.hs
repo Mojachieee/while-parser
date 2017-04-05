@@ -134,27 +134,23 @@ data Stm = SEQ [Stm]
 -- Boolean Expressions
 data Bexp = TRUE | FALSE
       |  Neg Bexp
-      |  BBinary OPb Bexp Bexp     -- For example true && false
+      |  And Bexp Bexp
+      |  Le Aexp Aexp
+      |  Eq Aexp Aexp
       |  RBinary OPr Aexp Aexp
       deriving (Show)
 
 -- Arithmetic Expressions
 data Aexp = V Var
        | N Num
-       | ABinary OPa Aexp Aexp
+       | Mult Aexp Aexp
+       | Add Aexp Aexp
+       | Sub Aexp Aexp
        deriving (Show)
 
--- Boolean Operators
-data OPb = And | OR deriving (Show)
 --Relational Operators
-data OPr = Greater | Lesser | GreaterEquals | LesserEquals | Eq deriving (Show)
+data OPr = Greater | Lesser | GreaterEquals deriving (Show)
 
---Arithmetic Operators
-data OPa = Add
-         | Sub
-         | Mult
-         | Divide
-         deriving (Show)
 
 
 whileParser :: Parser Stm
@@ -212,8 +208,8 @@ b' = parens b'
     <|> TRUE <$ kword "True"
     <|> FALSE <$ kword "False"
     <|> Neg <$ kword "not" <*> b
-    <|> BBinary And <$> b <* kword "and" <*> b
-    <|> BBinary OR <$> b <* kword "or" <*> b
+    <|> And <$> b <* kword "and" <*> b
+    <|> Le <$> a <* kword "<=" <*> a
     <|> oPr
 
     -- Do notation for And
@@ -231,23 +227,23 @@ a = makeExprParser aTerm aOperators
 
 bOperators :: [[Operator Parser Bexp]]
 bOperators = [ [ Prefix (kword "!" *> pure Neg) ] ,
-               [ InfixL (kword "^" *> pure (BBinary And)) ] ,
-               [ InfixL (kword "or" *> pure (BBinary OR)) ]
+               [ InfixL (kword "^" *> pure And) ] 
              ]
 
 aOperators :: [[Operator Parser Aexp]]
 aOperators = [ 
-               [ InfixL (symbol "*" *> pure (ABinary Mult)) ] ,
-               [ InfixL (symbol "/" *> pure (ABinary Divide)) ] ,
-               [ InfixL (symbol "+" *> pure (ABinary Add)) ] ,
-               [ InfixL (symbol "-" *> pure (ABinary Sub)) ]
+               [ InfixL (symbol "*" *> pure Mult) ] ,
+               [ InfixL (symbol "+" *> pure Add) ] ,
+               [ InfixL (symbol "-" *> pure Sub) ]
              ]
 
 bTerm :: Parser Bexp
 bTerm = parens b
      <|> (kword "true") *> pure (TRUE)
      <|> (kword "false") *> pure (FALSE)
-     <|> oPr
+     <|> Eq <$> a <* symbol "=" <*> a
+     <|> Le <$> a <* kword "<=" <*> a
+
 
 aTerm :: Parser Aexp
 aTerm = parens a
@@ -264,7 +260,5 @@ oPr = do
 
 relation :: Parser OPr
 relation =  (symbol ">=" *> pure GreaterEquals)
-        <|> (symbol "<=" *> pure LesserEquals)
         <|> (symbol ">" *> pure Greater)
         <|> (symbol "<" *> pure Lesser)
-        <|> (symbol "=" *> pure Eq)
