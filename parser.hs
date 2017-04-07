@@ -121,12 +121,11 @@ type DecV = [(Var,Aexp)]
 type DecP = [(Pname, Stm)]
 
 -- Statements
-data Stm = SEQ [Stm]
+data Stm = Skip
        | Ass Var Aexp
        | Comp Stm Stm
        | If Bexp Stm Stm
        | While Bexp Stm
-       | Skip
        | Block DecV DecP Stm
        | Call Pname
        deriving (Show)
@@ -161,7 +160,9 @@ stat = parens stat <|> statSeq
 
 statSeq :: Parser Stm
 statSeq = f <$> sepBy1 stat' semi
-      where f l = if length l == 1 then head l else SEQ l   -- If there's only 1 statement return it
+      where f [] = error "Error"
+            f [x] = x
+            f (x:xs) = Comp x (f xs)
 
 stat' :: Parser Stm    -- Parsers all possible statements
 stat' = ifStat <|> whileStat <|> skipStat <|> assignStat
