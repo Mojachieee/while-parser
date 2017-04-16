@@ -2,48 +2,18 @@
 
 
 
-{-
-While Programming language BNF
-http://studentnet.cs.manchester.ac.uk/ugt/2012/COMP11212/lecture03.pdf
 
-x,y - Program Variables
-n - Number literals
-
-S - Statements
-S ::= x:a
-    | skip
-    | S1; S2
-    | if P then s1 else S2
-    | while P do S
-
-a - Arithmetic Expresions
-a ::= x
-    | n
-    | a1 oPa a2
-oPa - Arithmetic operations
-oPa ::= + | - | * | /
-
-P - Boolean Predicates
-P ::= true
-    | false
-    | not P
-    | P1 oPb P2
-    | a1 oPr a2
-
-oPb ::= and | or
-oPr ::= < | <= | = | > | >=
--}
--- While Language implementation using applicative parsing (as oppose to monadic parsing)
+-- While Language implementation 
 module While where
 import Prelude hiding (Num)
 import Control.Monad (void)
 import Text.Megaparsec
 import Text.Megaparsec.Expr
-import Text.Megaparsec.String   -- input stream is of type â€˜Stringâ€™
+import Text.Megaparsec.String   -- input stream is of type string
 import qualified Text.Megaparsec.Lexer as Lexer
 
 {-
-  Useful functions
+  Useful functions definitions
 
   (<|>) :: Alternative f => f a -> f a -> f a
     Or statement, without caring for associativity
@@ -66,10 +36,12 @@ import qualified Text.Megaparsec.Lexer as Lexer
 
  -}
 
--- Use parseTest p string           to test parse p on the string
+-- Use parseTest p string           to test parser p on the string
 parseFromFile :: Parsec e String a -> String -> IO (Either (ParseError Char e) a)
 parseFromFile p file = runParser p file <$> readFile file
 
+
+-- User parseFile "<file name>"     to test the whileParser on a file
 parseFile :: FilePath -> IO () 
 parseFile filePath = do
   file <- readFile filePath
@@ -79,7 +51,7 @@ parseFile filePath = do
 
         -- LEXER BEGINS --
 
-whiteSpace :: Parser ()   -- Deals with whiteSpace
+whiteSpace :: Parser ()   -- Parsers whitespace and comments
 whiteSpace = Lexer.space (void spaceChar) lineCmnt blockCmnt
           where lineCmnt  = Lexer.skipLineComment "//"
                 blockCmnt = Lexer.skipBlockComment "/*" "*/"
@@ -90,7 +62,7 @@ lexeme = Lexer.lexeme whiteSpace
 symbol :: String -> Parser String     -- Parses a given string and the whitespace after it
 symbol = Lexer.symbol whiteSpace
 
-parens :: Parser a -> Parser a        -- Parses stuff between parenthesis
+parens :: Parser a -> Parser a        -- Parses stuff between parentheses
 parens = between (symbol  "(") (symbol ")")
 
 semi :: Parser String              -- Parses a semi-colon
@@ -163,7 +135,7 @@ whileParser :: Parser Stm
 whileParser = whiteSpace *> stat <* eof   -- Gets rid of initial whiteSpace
 
 stat :: Parser Stm
-stat = parens stat <|> statSeq <|> block
+stat = parens stat <|> statSeq <|> block <|> parens block
 
 statSeq :: Parser Stm
 statSeq = f <$> sepBy1 stat' semi
@@ -177,37 +149,41 @@ stat' = ifStat <|> whileStat <|> skipStat <|> assignStat <|> parens block <|> bl
 block :: Parser Stm
 block =
  do kword "begin"
-    variableDecl <- varDecl
-    procedureDecl <- procDecl
+    variableDec <- varDec
+    procedureDec <- procDec
     stm <- stat
     kword "end"
-    return $ Block variableDecl procedureDecl stm
+    return $ Block variableDec procedureDec stm
 
-varDecl = many varDecl'
+varDec :: Parser [(Var,Aexp)]
+varDec = many varDec'
 
-varDecl' =
+varDec' :: Parser (Var,Aexp)
+varDec' =
   do kword "var"
      var <- identifier
      symbol ":="
-     exp <- a
+     aexp <- a
      semi
-     return $ (var,exp)
+     return $ (var,aexp)
 
-procDecl = many procDecl' -- manu says that it can have one or many procedure declarations
+procDec :: Parser [(Pname, Stm)]
+procDec = many procDec'
 
-procDecl' =
+procDec' :: Parser (Pname, Stm)
+procDec' =
   do kword "proc"
-     progName <- identifier
+     procName <- identifier
      kword "is"
      stm <- stat'
      semi
-     return $ (progName,stm)
+     return $ (procName,stm)
 
-call :: Parser Stm -- call p  where p is a string of the name of the program
+call :: Parser Stm
 call =
   do  kword "call"
-      progName <- identifier
-      return $ Call progName
+      procName <- identifier
+      return $ Call procName
 
 ifStat :: Parser Stm   -- Parses an if statement
 ifStat = If <$ kword "if" <*> b <* kword "then" <*> stat <* kword "else" <*> stat
@@ -245,7 +221,6 @@ assignStat =
      expr <- a
      return $ Ass var expr
 
--- Alternate way
 b' :: Parser Bexp
 b' = parens b'
     <|> TRUE <$ kword "True"
@@ -293,6 +268,8 @@ aTerm = parens a
      <|> V     <$>  identifier
      <|> N <$> integer
 
+
+-- Example of how to parse other relations, using an intermediate oPr data constructor (as defined in the Bexp datatype)
 
 oPr :: Parser Bexp
 oPr = do
