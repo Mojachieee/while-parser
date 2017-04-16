@@ -160,10 +160,10 @@ data OPr = Greater | Lesser | GreaterEquals deriving (Show)
 
 
 whileParser :: Parser Stm
-whileParser = whiteSpace *> stat <* eof   -- get rid of initial whiteSpace
+whileParser = whiteSpace *> stat <* eof   -- Gets rid of initial whiteSpace
 
 stat :: Parser Stm
-stat = parens stat <|> statSeq <|> parens block
+stat = parens stat <|> statSeq <|> block
 
 statSeq :: Parser Stm
 statSeq = f <$> sepBy1 stat' semi
@@ -171,8 +171,8 @@ statSeq = f <$> sepBy1 stat' semi
             f [x] = x
             f (x:xs) = Comp x (f xs)
 
-stat' :: Parser Stm    -- Parsers all possible statements
-stat' = ifStat <|> whileStat <|> skipStat <|> assignStat <|> block <|> call
+stat' :: Parser Stm    -- Parses all possible statements
+stat' = ifStat <|> whileStat <|> skipStat <|> assignStat <|> parens block <|> block <|> call
 
 block :: Parser Stm
 block =
