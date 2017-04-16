@@ -70,6 +70,13 @@ import qualified Text.Megaparsec.Lexer as Lexer
 parseFromFile :: Parsec e String a -> String -> IO (Either (ParseError Char e) a)
 parseFromFile p file = runParser p file <$> readFile file
 
+parseFile :: FilePath -> IO () 
+parseFile filePath = do
+  file <- readFile filePath
+  putStrLn $ case parse whileParser filePath file of
+      Left err -> parseErrorPretty err
+      Right x -> show x
+
         -- LEXER BEGINS --
 
 whiteSpace :: Parser ()   -- Deals with whiteSpace
@@ -96,7 +103,7 @@ kword :: String -> Parser ()      -- Checks a parsed keyword isn't a prefix of a
 kword w = string w *> notFollowedBy alphaNumChar *> whiteSpace
 
 keywords :: [String]          -- All the reserved keywords
-keywords = ["if", "then", "else", "while", "do", "skip", "true", "false", "not", "and", "or"]
+keywords = ["if", "then", "else", "while", "do", "skip", "true", "false", "not", "and", "or", "begin", "end", "call", "var", "proc"]
 
 identifier :: Parser String
 identifier = (lexeme . try) (p >>= check)
@@ -156,7 +163,7 @@ whileParser :: Parser Stm
 whileParser = whiteSpace *> stat <* eof   -- get rid of initial whiteSpace
 
 stat :: Parser Stm
-stat = parens stat <|> statSeq
+stat = parens stat <|> statSeq <|> parens block
 
 statSeq :: Parser Stm
 statSeq = f <$> sepBy1 stat' semi
@@ -165,7 +172,42 @@ statSeq = f <$> sepBy1 stat' semi
             f (x:xs) = Comp x (f xs)
 
 stat' :: Parser Stm    -- Parsers all possible statements
-stat' = ifStat <|> whileStat <|> skipStat <|> assignStat
+stat' = ifStat <|> whileStat <|> skipStat <|> assignStat <|> block <|> call
+
+block :: Parser Stm
+block =
+ do kword "begin"
+    variableDecl <- varDecl
+    procedureDecl <- procDecl
+    stm <- stat
+    kword "end"
+    return $ Block variableDecl procedureDecl stm
+
+varDecl = many varDecl'
+
+varDecl' =
+  do kword "var"
+     var <- identifier
+     symbol ":="
+     exp <- a
+     semi
+     return $ (var,exp)
+
+procDecl = many procDecl' -- manu says that it can have one or many procedure declarations
+
+procDecl' =
+  do kword "proc"
+     progName <- identifier
+     kword "is"
+     stm <- stat'
+     semi
+     return $ (progName,stm)
+
+call :: Parser Stm -- call p  where p is a string of the name of the program
+call =
+  do  kword "call"
+      progName <- identifier
+      return $ Call progName
 
 ifStat :: Parser Stm   -- Parses an if statement
 ifStat = If <$ kword "if" <*> b <* kword "then" <*> stat <* kword "else" <*> stat
@@ -191,7 +233,7 @@ whileStat =
  -- Equivalent definition for while
  -- While <$ kword "while" <*> b <* kword "do" <*> stat
 
- -- $ is for avoiding parentheses, it give precedence to stuff after it
+ -- $ is for avoiding parentheses, it gives precedence to stuff after it
 
 skipStat :: Parser Stm     -- Parses a skip statement
 skipStat = Skip <$ kword "skip"
