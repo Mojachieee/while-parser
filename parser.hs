@@ -308,6 +308,30 @@ b_val (And b b') s = (b_val b s) && (b_val b' s)
 b_val (Le a a') s  = (a_val a s) <= (a_val a' s)
 b_val (Eq a a') s  = (a_val a s) == (a_val a' s)
 
+update :: State -> Z -> Var -> State
+update s v x y 
+  | x == y  = v
+  | otherwise = s y
+
+cond :: (a->T, a->a, a->a) -> (a->a)
+cond (p, g, g') s
+  | p s = g s
+  | otherwise = g' s
+
+fix :: ((State->State)->(State->State))->(State->State)
+fix ff = ff (fix ff)
+
+s_ds :: Stm -> State -> State
+s_ds (Skip) s       = s
+s_ds (Ass x a) s    = update s (a_val a s) x
+s_ds (Comp s1 s2) s = ((s_ds s2) . (s_ds s1)) s
+s_ds (If b s1 s2) s = (cond (b_val b, s_ds s1, s_ds s2)) s
+s_ds (While b s1) s = (fix ff) s
+  where
+    ff :: (State -> State) -> (State -> State)
+    ff g = cond (b_val b, g.s_ds s1, id)
+
+
 
 
 s :: State
@@ -322,5 +346,48 @@ testA = Mult (Add (V "x") (V "y")) (Sub (V "z") (N 1))
 testB :: Bexp
 testB = (Neg (Eq (Add (V "x")(V "y")) (N 4)))
 
+s' :: State
+s' = update s 5 "x"
+
+testStm :: Stm
+testStm = 
+  (Comp
+    (Ass "y" (N 1))
+    (While
+     (Neg (Eq (V "x") (N 1)))
+      (Comp
+        (Ass "y" (Mult (V "y") (V "x")))
+        (Ass "x" (Sub (V "x") (N 1)))
+        )
+    )
+  )
 
 
+-- Natural Semantics
+
+data Config = Inter Stm State | Final State
+
+ns_stm :: Config -> Config
+ns_stm (Inter (Ass x a) s) = Final (update s (a_val a s) x)
+ns_stm (Inter (Skip) s) = Final s
+ns_stm (Inter (Comp ss1 ss2) s) = Final s''
+  where
+  Final s' = ns_stm (Inter ss1 s)
+  Final s'' = ns_stm (Inter ss2 s')
+ns_stm (Inter (If b ss1 ss2) s)
+  | b_val b s = Final s'
+  | otherwise = Final s''
+  where
+  Final s' = ns_stm (Inter ss1 s)
+  Final s'' = ns_stm (Inter ss2 s)
+ns_stm (Inter (While b ss) s)
+  | b_val b s = Final s''
+  | otherwise = Final s
+  where
+  Final s' = ns_stm (Inter ss s)
+  Final s'' = ns_stm (Inter (While b ss) s')
+
+s_ns :: Stm -> State -> State
+s_ns ss s = s'
+  where
+  Final s' = ns_stm (Inter ss s)
