@@ -7,7 +7,7 @@
 module While where
 import Prelude hiding (Num)
 import Control.Monad (void)
-import Text.Megaparsec
+import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Expr
 import Text.Megaparsec.String   -- input stream is of type string
 import qualified Text.Megaparsec.Lexer as Lexer
@@ -282,3 +282,45 @@ relation :: Parser OPr
 relation =  (symbol ">=" *> pure GreaterEquals)
         <|> (symbol ">" *> pure Greater)
         <|> (symbol "<" *> pure Lesser)
+
+
+-- Evaluator Begins
+
+type T = Bool
+type Z = Integer
+type State = Var -> Z
+
+n_val :: Num -> Z
+n_val n = n
+
+a_val :: Aexp-> State -> Z
+a_val (N n) s = n_val n
+a_val (V x) s = s x
+a_val (Add a b) s = (a_val a s) + (a_val b s)
+a_val (Mult a b) s = (a_val a s) * (a_val b s)
+a_val (Sub a b) s = (a_val a s) - (a_val b s)
+
+b_val :: Bexp -> State -> T
+b_val TRUE s       = True
+b_val FALSE s      = False 
+b_val (Neg b) s    = not (b_val b s)
+b_val (And b b') s = (b_val b s) && (b_val b' s)
+b_val (Le a a') s  = (a_val a s) <= (a_val a' s)
+b_val (Eq a a') s  = (a_val a s) == (a_val a' s)
+
+
+
+s :: State
+s "x" = 1
+s "y" = 2
+s "z" = 3
+s  _  = 0
+
+testA :: Aexp
+testA = Mult (Add (V "x") (V "y")) (Sub (V "z") (N 1))
+
+testB :: Bexp
+testB = (Neg (Eq (Add (V "x")(V "y")) (N 4)))
+
+
+
