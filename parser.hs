@@ -335,9 +335,9 @@ s_ds (While b s1) s = (fix ff) s
 
 
 s :: State
-s "x" = 1
-s "y" = 2
-s "z" = 3
+s "x" = 0
+s "y" = 0
+s "z" = 0
 s  _  = 0
 
 testA :: Aexp
@@ -365,29 +365,50 @@ testStm =
 
 -- Natural Semantics
 
-data Config = Inter Stm State | Final State
+data Config = Inter Stm State EnvP | Final State EnvP
 
 ns_stm :: Config -> Config
-ns_stm (Inter (Ass x a) s) = Final (update s (a_val a s) x)
-ns_stm (Inter (Skip) s) = Final s
-ns_stm (Inter (Comp ss1 ss2) s) = Final s''
+ns_stm (Inter (Ass x a) s envP) = Final (update s (a_val a s) x) envP
+ns_stm (Inter (Skip) s envP) = Final s envP
+ns_stm (Inter (Comp ss1 ss2) s envP) = Final s'' envP''
   where
-  Final s' = ns_stm (Inter ss1 s)
-  Final s'' = ns_stm (Inter ss2 s')
-ns_stm (Inter (If b ss1 ss2) s)
-  | b_val b s = Final s'
-  | otherwise = Final s''
+  Final s' envP' = ns_stm (Inter ss1 s envP)
+  Final s'' envP'' = ns_stm (Inter ss2 s' envP')
+ns_stm (Inter (If b ss1 ss2) s envP)
+  | b_val b s = Final s' envP
+  | otherwise = Final s'' envP
   where
-  Final s' = ns_stm (Inter ss1 s)
-  Final s'' = ns_stm (Inter ss2 s)
-ns_stm (Inter (While b ss) s)
-  | b_val b s = Final s''
-  | otherwise = Final s
+  Final s' envP' = ns_stm (Inter ss1 s envP) 
+  Final s'' envP'' = ns_stm (Inter ss2 s envP) 
+ns_stm (Inter (While b ss) s envP)
+  | b_val b s = Final s'' envP
+  | otherwise = Final s envP
   where
-  Final s' = ns_stm (Inter ss s)
-  Final s'' = ns_stm (Inter (While b ss) s')
+  Final s' envP' = ns_stm (Inter ss s envP)
+  Final s'' envP'' = ns_stm (Inter (While b ss) s' envP')
 
 s_ns :: Stm -> State -> State
 s_ns ss s = s'
   where
-  Final s' = ns_stm (Inter ss s)
+  Final s' envP = ns_stm (Inter ss s envP)
+
+
+type EnvP = Pname -> Stm
+
+updateP :: DecP -> EnvP -> EnvP
+-- In Full [(Pname,Stm)] -> Pname -> Stm -> Pname -> Stm
+-- dp :: DecP
+-- envP :: Pname -> Stm
+-- envPname :: string 
+updateP [] envP pname' = envP pname'
+updateP ((pname, stm):xs) envP pname'
+  | pname == pname' = stm
+  | otherwise = updateP xs envP pname'
+
+s_dynamic :: Stm -> State -> State
+s_dynamic ss s = s'
+  where
+    Final s' envP' = ns_stm (Inter ss s envP)
+    envP _ = Skip
+
+scopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
