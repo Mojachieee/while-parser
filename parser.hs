@@ -7,10 +7,12 @@
 module While where
 import Prelude hiding (Num)
 import Control.Monad (void)
-import Text.Megaparsec hiding (State)
+import Text.Megaparsec hiding (State, parse)
+
 import Text.Megaparsec.Expr
 import Text.Megaparsec.String   -- input stream is of type string
 import qualified Text.Megaparsec.Lexer as Lexer
+import qualified Text.Megaparsec.Prim as MParse
 
 {-
   Useful functions definitions
@@ -36,18 +38,25 @@ import qualified Text.Megaparsec.Lexer as Lexer
 
  -}
 
+
+parse :: String -> Stm
+parse str =
+    case MParse.parse whileParser "" str of
+      Left e  -> error $ show e
+      Right r -> r
+
 -- Use parseTest p string           to test parser p on the string
 parseFromFile :: Parsec e String a -> String -> IO (Either (ParseError Char e) a)
 parseFromFile p file = runParser p file <$> readFile file
 
 
--- User parseFile "<file name>"     to test the whileParser on a file
-parseFile :: FilePath -> IO () 
-parseFile filePath = do
-  file <- readFile filePath
-  putStrLn $ case parse whileParser filePath file of
-      Left err -> parseErrorPretty err
-      Right x -> show x
+-- -- User parseFile "<file name>"     to test the whileParser on a file
+-- parseFile :: FilePath -> IO () 
+-- parseFile filePath = do
+--   file <- readFile filePath
+--   putStrLn $ case parse whileParser filePath file of
+--       Left err -> parseErrorPretty err
+--       Right x -> show x
 
         -- LEXER BEGINS --
 
@@ -335,7 +344,7 @@ s_ds (While b s1) s = (fix ff) s
 
 
 s :: State
-s "x" = 0
+s "x" = 5
 s "y" = 0
 s "z" = 0
 s  _  = 0
@@ -428,6 +437,12 @@ s_dynamic ss s = s'
     Final s' envP' = ns_stm (Inter ss s envP)
     envP _ = Skip
 
+testProg = "/*fac call (p.55)*/ begin proc fac is begin var z := x; if x = 1 then skip else ( x := x - 1; call fac; y := z * y ) end; y := 1; call fac end"
+testProg2 = "begin var y := 1; (x:= 1; begin var x :=2; y:=x+1 end; x:= y +x) end"
+
+
 scopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
 
 scopeProg2 = Block [("y",N 1)] [] (Comp (Ass "x" (N 1)) (Comp (Block [("x",N 2)] [] (Ass "y" (Add (V "x") (N 1)))) (Ass "x" (Add (V "y") (V "x")))))
+
+scopeProg3 = Block [] [("fac",Block [("z",V "x")] [] (If (Eq (V "x") (N 1)) Skip (Comp (Ass "x" (Sub (V "x") (N 1))) (Comp (Call "fac") (Ass "y" (Mult (V "z") (V "y")))))))] (Comp (Ass "y" (N 1)) (Call "fac"))
