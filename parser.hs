@@ -386,7 +386,9 @@ ns_stm (Inter (While b ss) s envP)
   where
   Final s' envP' = ns_stm (Inter ss s envP)
   Final s'' envP'' = ns_stm (Inter (While b ss) s' envP')
-ns_stm (Inter (Block decV decP stm) s envP) = ns_stm (Inter stm (updateV decV s) (updateP decP envP))
+ns_stm (Inter (Block decV decP stm) s envP) = Final (restoreState decV s s') envP'
+  where 
+  Final s' envP' = ns_stm (Inter stm (updateV decV s) (updateP decP envP))
 ns_stm (Inter (Call pname) s envP) =  ns_stm (Inter (envP pname) s envP) 
 
 s_ns :: Stm -> State -> State
@@ -398,6 +400,15 @@ updateV :: DecV -> State -> State
 updateV [] s = s
 updateV ((var, aexp):xs) s = updateV xs (update s (a_val aexp s) var)
 
+
+restoreState :: DecV -> State -> State -> State
+restoreState [] sOld s y = s y
+restoreState ((var,aexp):xs) sOld s y = restoreState xs sOld (rs var sOld s) y
+
+rs :: Var -> State -> State -> State
+rs var sOld s y 
+  | var == y  = sOld y
+  | otherwise= s y
 
 type EnvP = Pname -> Stm
 
