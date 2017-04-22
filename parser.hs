@@ -386,11 +386,17 @@ ns_stm (Inter (While b ss) s envP)
   where
   Final s' envP' = ns_stm (Inter ss s envP)
   Final s'' envP'' = ns_stm (Inter (While b ss) s' envP')
+ns_stm (Inter (Block decV decP stm) s envP) = ns_stm (Inter stm (updateV decV s) (updateP decP envP))
+ns_stm (Inter (Call pname) s envP) =  ns_stm (Inter (envP pname) s envP) 
 
 s_ns :: Stm -> State -> State
 s_ns ss s = s'
   where
   Final s' envP = ns_stm (Inter ss s envP)
+
+updateV :: DecV -> State -> State
+updateV [] s = s
+updateV ((var, aexp):xs) s = updateV xs (update s (a_val aexp s) var)
 
 
 type EnvP = Pname -> Stm
@@ -412,3 +418,5 @@ s_dynamic ss s = s'
     envP _ = Skip
 
 scopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
+
+scopeProg2 = Block [("y",N 1)] [] (Comp (Ass "x" (N 1)) (Comp (Block [("x",N 2)] [] (Ass "y" (Add (V "x") (N 1)))) (Ass "x" (Add (V "y") (V "x")))))
