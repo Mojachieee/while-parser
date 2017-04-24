@@ -344,7 +344,7 @@ s_ds (While b s1) s = (fix ff) s
 
 
 s :: State
-s "x" = 5
+s "x" = 0
 s "y" = 0
 s "z" = 0
 s  _  = 0
@@ -472,11 +472,16 @@ mNS_stm (MInter (While b ss) s envP)
 mNS_stm (MInter (Block decV decP stm) s envP) = MFinal (restoreState decV s s') envP'
   where 
   MFinal s' envP' = mNS_stm (MInter stm (updateV decV s) (updateMP decP envP))
--- mNS_stm (MInter (Call pname) s envP) =  mNS_stm (MInter (envP' pname) s envP) 
---   where
---   envP' = updateMP [] envP
+mNS_stm (MInter (Call pname) s envP) =  mNS_stm (MInter (stm) s envP)
+  where
+  MType (stm, envP') = envP pname
 
 
+s_mixed :: Stm -> State -> State
+s_mixed ss s = s'
+  where
+    MFinal s' envP' = mNS_stm (MInter ss s envP)
+    envP _ = MType (Skip, envP)       -- I think this is causing the problem
 
 testProg = "/*fac call (p.55)*/ begin proc fac is begin var z := x; if x = 1 then skip else ( x := x - 1; call fac; y := z * y ) end; y := 1; call fac end"
 testProg2 = "begin var y := 1; (x:= 1; begin var x :=2; y:=x+1 end; x:= y +x) end"
