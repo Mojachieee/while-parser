@@ -437,6 +437,19 @@ s_dynamic ss s = s'
     Final s' envP' = ns_stm (Inter ss s envP)
     envP _ = Skip
 
+
+
+type SEnvP = Pname -> (Stm, Pname)
+
+updateSP :: DecP -> SEnvP -> SEnvP
+updateSP [] envP pname' = envP pname'
+updateSP ((pname, stm):xs) envP pname'
+  | pname == pname' = (stm, pname)
+  | otherwise = updateSP xs envP pname'
+
+
+
+
 testProg = "/*fac call (p.55)*/ begin proc fac is begin var z := x; if x = 1 then skip else ( x := x - 1; call fac; y := z * y ) end; y := 1; call fac end"
 testProg2 = "begin var y := 1; (x:= 1; begin var x :=2; y:=x+1 end; x:= y +x) end"
 
