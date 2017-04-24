@@ -375,6 +375,7 @@ testStm =
 -- Natural Semantics with dynamic scope
 
 data Config = Inter Stm State EnvP | Final State EnvP
+type EnvP = Pname -> Stm
 
 ns_stm :: Config -> Config
 ns_stm (Inter (Ass x a) s envP) = Final (update s (a_val a s) x) envP
@@ -419,7 +420,7 @@ rs var sOld s y
   | var == y  = sOld y
   | otherwise= s y
 
-type EnvP = Pname -> Stm
+
 
 updateP :: DecP -> EnvP -> EnvP
 -- In Full [(Pname,Stm)] -> Pname -> Stm -> Pname -> Stm
@@ -440,14 +441,40 @@ s_dynamic ss s = s'
 
 -- Natural Semantics with Mixed scope
 data MConfig = MInter Stm State MEnvP | MFinal State MEnvP
-type MEnvP = Pname -> (Stm, Pname)
+type MEnvP = Pname -> MType
+data MType = MType (Stm, MEnvP) | Empty
 
 updateMP :: DecP -> MEnvP -> MEnvP
-updateMP [] envP pname' = envP pname'
+updateMP [] envP pname = envP pname
 updateMP ((pname, stm):xs) envP pname'
-  | pname == pname' = (stm, pname)
+  | pname == pname' = envP pname'
   | otherwise = updateMP xs envP pname'
 
+mNS_stm :: MConfig -> MConfig
+mNS_stm (MInter (Ass x a) s envP) = MFinal (update s (a_val a s) x) envP
+mNS_stm (MInter (Skip) s envP) = MFinal s envP
+mNS_stm (MInter (Comp ss1 ss2) s envP) = MFinal s'' envP''
+  where
+  MFinal s' envP' = mNS_stm (MInter ss1 s envP)
+  MFinal s'' envP'' = mNS_stm (MInter ss2 s' envP')
+mNS_stm (MInter (If b ss1 ss2) s envP)
+  | b_val b s = MFinal s' envP
+  | otherwise = MFinal s'' envP
+  where
+  MFinal s' envP' = mNS_stm (MInter ss1 s envP) 
+  MFinal s'' envP'' = mNS_stm (MInter ss2 s envP) 
+mNS_stm (MInter (While b ss) s envP)
+  | b_val b s = MFinal s'' envP
+  | otherwise = MFinal s envP
+  where
+  MFinal s' envP' = mNS_stm (MInter ss s envP)
+  MFinal s'' envP'' = mNS_stm (MInter (While b ss) s' envP')
+mNS_stm (MInter (Block decV decP stm) s envP) = MFinal (restoreState decV s s') envP'
+  where 
+  MFinal s' envP' = mNS_stm (MInter stm (updateV decV s) (updateMP decP envP))
+-- mNS_stm (MInter (Call pname) s envP) =  mNS_stm (MInter (envP' pname) s envP) 
+--   where
+--   envP' = updateMP [] envP
 
 
 
