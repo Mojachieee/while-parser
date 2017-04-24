@@ -372,7 +372,7 @@ testStm =
   )
 
 
--- Natural Semantics
+-- Natural Semantics with dynamic scope
 
 data Config = Inter Stm State EnvP | Final State EnvP
 
@@ -438,14 +438,15 @@ s_dynamic ss s = s'
     envP _ = Skip
 
 
+-- Natural Semantics with Mixed scope
+data MConfig = MInter Stm State MEnvP | MFinal State MEnvP
+type MEnvP = Pname -> (Stm, Pname)
 
-type SEnvP = Pname -> (Stm, Pname)
-
-updateSP :: DecP -> SEnvP -> SEnvP
-updateSP [] envP pname' = envP pname'
-updateSP ((pname, stm):xs) envP pname'
+updateMP :: DecP -> MEnvP -> MEnvP
+updateMP [] envP pname' = envP pname'
+updateMP ((pname, stm):xs) envP pname'
   | pname == pname' = (stm, pname)
-  | otherwise = updateSP xs envP pname'
+  | otherwise = updateMP xs envP pname'
 
 
 
