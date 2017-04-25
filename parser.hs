@@ -344,7 +344,7 @@ s_ds (While b s1) s = (fix ff) s
 
 
 s :: State
-s "x" = 0
+s "x" = 4
 s "y" = 0
 s "z" = 0
 s  _  = 0
@@ -444,11 +444,15 @@ data MConfig = MInter Stm State MEnvP | MFinal State MEnvP
 type MEnvP = Pname -> MType
 data MType = MTypeC Stm MEnvP | Empty
 
+
 updateMP :: DecP -> MEnvP -> MEnvP
 updateMP [] envP pname = envP pname
-updateMP ((pname, stm):xs) envP pname'
-  | pname == pname' = MTypeC stm envP
-  | otherwise = updateMP xs envP pname'
+updateMP (x:xs) envP pname' = updateMP xs (uMP x envP) pname'
+
+uMP :: (Pname,Stm) -> MEnvP -> MEnvP
+uMP (pname',stm) envP pname
+  | pname' == pname = MTypeC stm envP
+  | otherwise = envP pname
 
 mNS_stm :: MConfig -> MConfig
 mNS_stm (MInter (Ass x a) s envP) = MFinal (update s (a_val a s) x) envP
@@ -492,7 +496,7 @@ testProg2 = "begin var y := 1; (x:= 1; begin var x :=2; y:=x+1 end; x:= y +x) en
 actualScopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
 
 
-scopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
+
 
 scopeProg2 = Block [("y",N 1)] [] (Comp (Ass "x" (N 1)) (Comp (Block [("x",N 2)] [] (Ass "y" (Add (V "x") (N 1)))) (Ass "x" (Add (V "y") (V "x")))))
 
