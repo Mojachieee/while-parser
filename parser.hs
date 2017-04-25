@@ -442,12 +442,12 @@ s_dynamic ss s = s'
 -- Natural Semantics with Mixed scope
 data MConfig = MInter Stm State MEnvP | MFinal State MEnvP
 type MEnvP = Pname -> MType
-data MType = MType (Stm, MEnvP) | Empty
+data MType = MTypeC Stm MEnvP | Empty
 
 updateMP :: DecP -> MEnvP -> MEnvP
 updateMP [] envP pname = envP pname
 updateMP ((pname, stm):xs) envP pname'
-  | pname == pname' = envP pname'
+  | pname == pname' = MTypeC stm envP
   | otherwise = updateMP xs envP pname'
 
 mNS_stm :: MConfig -> MConfig
@@ -472,19 +472,24 @@ mNS_stm (MInter (While b ss) s envP)
 mNS_stm (MInter (Block decV decP stm) s envP) = MFinal (restoreState decV s s') envP'
   where 
   MFinal s' envP' = mNS_stm (MInter stm (updateV decV s) (updateMP decP envP))
-mNS_stm (MInter (Call pname) s envP) =  mNS_stm (MInter (stm) s envP)
-  where
-  MType (stm, envP') = envP pname
+mNS_stm (MInter (Call pname) s envP) =  MFinal s' envP''
+  where 
+  MFinal s' envP'' = mNS_stm (MInter (stm) s envP')
+  MTypeC stm envP' = envP pname
+  Empty = undefined
 
 
 s_mixed :: Stm -> State -> State
 s_mixed ss s = s'
   where
     MFinal s' envP' = mNS_stm (MInter ss s envP)
-    envP _ = MType (Skip, envP)       -- I think this is causing the problem
+    envP _ = Empty      -- I think this is causing the problem
 
 testProg = "/*fac call (p.55)*/ begin proc fac is begin var z := x; if x = 1 then skip else ( x := x - 1; call fac; y := z * y ) end; y := 1; call fac end"
 testProg2 = "begin var y := 1; (x:= 1; begin var x :=2; y:=x+1 end; x:= y +x) end"
+
+
+actualScopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
 
 
 scopeProg = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
