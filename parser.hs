@@ -487,7 +487,31 @@ s_mixed :: Stm -> State -> State
 s_mixed ss s = s'
   where
     MFinal s' envP' = mNS_stm (MInter ss s envP)
-    envP _ = Empty      -- I think this is causing the problem
+    envP _ = Empty      
+
+
+-- Natural Semantics with static scope
+type Loc = Z
+data Loc' = Loc Loc | Next
+type SEnvV = Var -> Loc
+type Store = Loc -> Z
+
+type SEnvP = Pname -> SType
+data SType = STypeC Stm SEnvV SEnvP
+
+updateSP :: DecP -> SEnvV -> SEnvP -> SEnvP
+updateSP [] envV envP pname = envP pname
+updateSP (x:xs) envV envP pname' = updateSP xs envV (uSP x envV envP) pname'
+
+uSP :: (Pname,Stm) -> SEnvV -> SEnvP -> SEnvP
+uSP (pname',stm) envV envP pname
+  | pname' == pname = STypeC stm envV envP
+  | otherwise = envP pname
+
+new :: Loc -> Loc
+new n = n + 1
+
+
 
 testProg = "/*fac call (p.55)*/ begin proc fac is begin var z := x; if x = 1 then skip else ( x := x - 1; call fac; y := z * y ) end; y := 1; call fac end"
 testProg2 = "begin var y := 1; (x:= 1; begin var x :=2; y:=x+1 end; x:= y +x) end"
